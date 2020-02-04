@@ -36,7 +36,7 @@ class CommentController {
 
     @PostMapping
     String addComment(String sourceType, String sourceId, String text) {
-        var author = ""; // TODO get from current authenticated user
+        var author = "user1"; // TODO get from current authenticated user
         return service.addComment(sourceType, sourceId, author, text);
     }
 
