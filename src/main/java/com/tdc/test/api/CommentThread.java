@@ -13,7 +13,7 @@ public class CommentThread {
     @NonNull private final Collection<String> authors;
     @NonNull private final List<Comment> comments;
 
-    public CommentThread(@NonNull String link, @NonNull Collection<String> authors, @NonNull List<Comment> comments) {
+    /*public CommentThread(@NonNull String link, @NonNull Collection<String> authors, @NonNull List<Comment> comments) {
         this.link = link;
         this.authors = authors;
         this.comments = comments;
@@ -25,5 +25,5 @@ public class CommentThread {
 
     public List<Comment> getComments() {
         return comments;
-    }
+    }*/
 }

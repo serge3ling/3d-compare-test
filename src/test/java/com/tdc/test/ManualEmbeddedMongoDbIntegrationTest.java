@@ -3,27 +3,16 @@ package com.tdc.test;
 
 import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
-import com.mongodb.Mongo;
-import com.mongodb.MongoClient;
 
 import com.tdc.test.api.Comment;
 
-import com.tdc.test.api.CommentService;
 import com.tdc.test.impl.CommentServiceImpl;
-import com.tdc.test.impl.CommentThreadEntity;
-import com.tdc.test.impl.CommentThreadRepository;
 import com.tdc.test.impl.MongoBean;
 import de.flapdoodle.embed.mongo.MongodExecutable;
-import de.flapdoodle.embed.mongo.MongodStarter;
-import de.flapdoodle.embed.mongo.config.IMongodConfig;
-import de.flapdoodle.embed.mongo.config.MongodConfigBuilder;
-import de.flapdoodle.embed.mongo.config.Net;
-import de.flapdoodle.embed.mongo.distribution.Version;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -36,7 +25,6 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 
-import static de.flapdoodle.embed.process.runtime.Network.localhostIsIPv6;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class ManualEmbeddedMongoDbIntegrationTest {
@@ -50,17 +38,6 @@ public class ManualEmbeddedMongoDbIntegrationTest {
 
     @Before
     public void setup() throws Exception {
-        /*String ip = "localhost";
-        int port = 27019;
-
-        IMongodConfig config = new MongodConfigBuilder().version(Version.Main.PRODUCTION)
-                .net(new Net(ip, port, localhostIsIPv6()))
-                .build();
-
-        MongodStarter starter = MongodStarter.getDefaultInstance();
-        executable = starter.prepare(config);
-        executable.start();
-        template = new MongoTemplate(new MongoClient(ip, port), "test");*/
         mongoBean = new MongoBean();
         mongoBean.postConstruct();
         template = mongoBean.template();
@@ -68,9 +45,6 @@ public class ManualEmbeddedMongoDbIntegrationTest {
 
     @After
     public void clean() {
-        /*if (executable != null) {
-            executable.stop();
-        }*/
         mongoBean.preDestroy();
     }
 
@@ -144,6 +118,7 @@ public class ManualEmbeddedMongoDbIntegrationTest {
         assertThat(filteredComments.get(0).get("text")).isEqualTo(testText);
 
         service = new CommentServiceImpl(mongoBean);
+        service.setTestRunning(true);
         ArrayList<String> users = new ArrayList<String>();
         users.add("user1");
         users.add("user2");
@@ -154,8 +129,21 @@ public class ManualEmbeddedMongoDbIntegrationTest {
         String cmtIdDel = service.addComment(testSrcType, testSrcId, "user1", "Say what?!");
         System.out.println(service.getThread(testSrcType, testSrcId));
 
-        service.updateComment(testSrcType, testSrcId, cmtIdCrap, "OK.");
+        String textToBeLast = "OK.";
+        service.updateComment(testSrcType, testSrcId, cmtIdCrap, textToBeLast);
         service.deleteComment(testSrcType, testSrcId, cmtIdDel);
         System.out.println(service.getThread(testSrcType, testSrcId));
+
+        /*
+        Two users talking:
+        user1: I'm testing.
+        user2: Crap.
+        user1: Say what?!
+        Then user2 changes their comment to OK and user1 deletes their last comment.
+        Then the last comment in the thread should be:
+        user2: OK.
+        */
+        List<Comment> commentList = service.getThread(testSrcType, testSrcId).getComments();
+        assertThat(commentList.get(commentList.size() - 1).getText()).isEqualTo(textToBeLast);
     }
 }

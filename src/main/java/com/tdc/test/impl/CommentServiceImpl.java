@@ -1,8 +1,5 @@
 package com.tdc.test.impl;
 
-import com.mongodb.BasicDBObject;
-import com.mongodb.BasicDBObjectBuilder;
-import com.mongodb.DBObject;
 import com.tdc.test.api.Comment;
 import com.tdc.test.api.CommentService;
 import com.tdc.test.api.CommentThread;
@@ -12,9 +9,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +25,7 @@ public class CommentServiceImpl implements CommentService {
     public static final String THREADS = "comment_threads";
     public static final String TEXTS = "comment_thread_texts";
 
+    private boolean testRunning = false;
     private final CommentThreadRepository repository;
 
     @Autowired
@@ -37,19 +37,6 @@ public class CommentServiceImpl implements CommentService {
             public Optional<CommentThreadEntity> findBySourceTypeAndSourceId(String sourceType, String sourceId) {
                 Optional<CommentThreadEntity> oc = Optional.empty();
 
-                /*Query query = new Query();
-                query.addCriteria(Criteria.where("sourceType").is(sourceType)
-                        .andOperator(Criteria.where("sourceId").is(sourceId))
-                );
-                List<DBObject> list = mongoBean.template().find(query, DBObject.class, THREADS);
-
-                if (list.size() == 1) {
-                    Document doc = (Document) list.get(0);
-                    CommentThreadEntity cmtThreadEnt = new CommentThreadEntity(
-                            (String) doc.get("id"),
-                            (String) doc.get("sourceType"), (String) doc.get("sourceId"));
-                    oc = Optional.of(cmtThreadEnt);
-                }*/
                 Query query = new Query();
                 query.addCriteria(Criteria.where("sourceType").is(sourceType)
                     .andOperator(Criteria.where("sourceId").is(sourceId))
@@ -75,35 +62,27 @@ public class CommentServiceImpl implements CommentService {
         this.mongoBean = mongoBean;
     }
 
-    private DBObject makeDbObjectOf(Comment comment) {
-        return BasicDBObjectBuilder.start()
-                .add("id", comment.getId())
-                .add("author", comment.getAuthor())
-                .add("createdAt", comment.getCreatedAt())
-                .add("updatedAt", comment.getUpdatedAt())
-                .add("text", comment.getText())
-                .get();
+    public void setTestRunning(boolean testRunning) {
+        this.testRunning = testRunning;
     }
 
-    private void updateAuthors(String link, Collection<String> authors) {
-        Query query = new Query();
-        query.addCriteria(Criteria.where("link").is(link));
-        List<CommentThread> texts = mongoBean.template().find(query, CommentThread.class, TEXTS);
-        CommentThread cmtThread = texts.get(0);//cmtThread.setAuthors(authors);
+    private boolean rightUser(Collection<String> authors) {
+        boolean oc = testRunning;
 
-        Document doc = new Document();
-        mongoBean.template().getConverter().write(cmtThread, doc);
-        Update update = Update.fromDocument(doc);
+        if (!oc) {
+            String user = SecurityContextHolder.getContext().getAuthentication().getName();
+            if (user != null) {
+                if (user.length() > 0) {
+                    oc = authors.contains(user);
+                }
+            }
+        }
 
-        mongoBean.template().upsert(query, update, TEXTS);
+        return oc;
     }
 
-    private Collection<String> pullAuthors(String link) {
-        Query query = new Query();
-        query.addCriteria(Criteria.where("link").is(link));
-        List<CommentThread> texts = mongoBean.template().find(query, CommentThread.class, TEXTS);
-        CommentThread cmtThread = texts.get(0);
-        return cmtThread.getAuthors();
+    private boolean rightUser(String author) {
+        return rightUser(new ArrayList<String>() {{ add(author); }});
     }
 
     @Override
@@ -112,7 +91,7 @@ public class CommentServiceImpl implements CommentService {
         System.out.println("opt.isEmpty(): " + opt.isEmpty() + ".");
         String link = opt.isEmpty() ? UUID.randomUUID().toString() : opt.get().getId();
 
-        if (opt.isEmpty()) {
+        if (opt.isEmpty() && rightUser(authors)) {
             CommentThreadEntity cmtThreadEnt = new CommentThreadEntity(link, sourceType, sourceId);
             CommentThread cmtTread = new CommentThread(link, authors, new java.util.ArrayList<Comment>());
             mongoBean.template().save(cmtThreadEnt, THREADS);
@@ -125,13 +104,19 @@ public class CommentServiceImpl implements CommentService {
         CommentThread oc = null;
         Optional<CommentThreadEntity> opt = repository.findBySourceTypeAndSourceId(sourceType, sourceId);
 
+        if (!testRunning) {
+            System.out.println("User: " + SecurityContextHolder.getContext().getAuthentication().getName() + ".");
+        }
+
         if (opt.isPresent()) {
             String link = opt.get().getId();
 
             Query query = new Query();
             query.addCriteria(Criteria.where("link").is(link));
             List<CommentThread> commentThreads = mongoBean.template().find(query, CommentThread.class, TEXTS);
-            oc = commentThreads.get(0);
+            if (rightUser(commentThreads.get(0).getAuthors())) {
+                oc = commentThreads.get(0);
+            }
         }
 
         return oc;
@@ -153,7 +138,7 @@ public class CommentServiceImpl implements CommentService {
             Collection<String> authors = commentThread.getAuthors();
             System.out.println("addComment, commentThread, authors: " + authors);
 
-            if (authors.contains(author)) {
+            if (authors.contains(author) && rightUser(author)) {
                 List<Comment> comments = commentThread.getComments();
                 comments.add(new Comment(commentId, author, Instant.now(), Instant.now(), text));
 
@@ -171,7 +156,6 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     public void updateComment(String sourceType, String sourceId, String commentId, String text) {
-        // TODO
         Optional<CommentThreadEntity> opt = repository.findBySourceTypeAndSourceId(sourceType, sourceId);
 
         if (opt.isPresent()) {
@@ -184,9 +168,11 @@ public class CommentServiceImpl implements CommentService {
             CommentThread commentThread = commentThreads.get(0);
             Collection<String> authors = commentThread.getAuthors();
             System.out.println("addComment, commentThread, authors: " + authors);
+            List<Comment> comments = commentThread.getComments();
+            String author = comments.stream().filter(cmt -> cmt.getId().equals(commentId))
+                    .findFirst().get().getAuthor();
 
-            if (true/*authors.contains(author)*/) {
-                List<Comment> comments = commentThread.getComments();
+            if (rightUser(author)) {
                 List<Comment> commentsNew = comments.stream().map(
                         cmt ->
                         (cmt.getId().equals(commentId) ?
@@ -206,7 +192,6 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     public void deleteComment(String sourceType, String sourceId, String commentId) {
-        // TODO
         Optional<CommentThreadEntity> opt = repository.findBySourceTypeAndSourceId(sourceType, sourceId);
 
         if (opt.isPresent()) {
@@ -219,9 +204,11 @@ public class CommentServiceImpl implements CommentService {
             CommentThread commentThread = commentThreads.get(0);
             Collection<String> authors = commentThread.getAuthors();
             System.out.println("addComment, commentThread, authors: " + authors);
+            List<Comment> comments = commentThread.getComments();
+            String author = comments.stream().filter(cmt -> cmt.getId().equals(commentId))
+                    .findFirst().get().getAuthor();
 
-            if (true/*authors.contains(author)*/) {
-                List<Comment> comments = commentThread.getComments();
+            if (rightUser(author)) {
                 boolean found = false;
 
                 for (int i = 0; i < comments.size(); i++) {

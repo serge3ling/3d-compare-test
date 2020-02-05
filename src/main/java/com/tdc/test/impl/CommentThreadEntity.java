@@ -12,8 +12,8 @@ public class CommentThreadEntity {
     @NonNull private final String sourceType;
     @NonNull private final String sourceId;
 
-    // I know, I know. TODO.
-    public CommentThreadEntity(String id, @NonNull String sourceType, @NonNull String sourceId) {
+    // I know, I know.
+    /*public CommentThreadEntity(String id, @NonNull String sourceType, @NonNull String sourceId) {
         this.id = id;
         this.sourceType = sourceType;
         this.sourceId = sourceId;
@@ -29,5 +29,5 @@ public class CommentThreadEntity {
 
     public String getSourceId() {
         return sourceId;
-    }
+    }*/
 }

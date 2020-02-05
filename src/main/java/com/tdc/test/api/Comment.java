@@ -13,8 +13,8 @@ public class Comment {
     @NonNull private final Instant updatedAt;
     @NonNull private final String text;
 
-    // Yeah, boilerplate. TODO.
-    public Comment(@NonNull String id, @NonNull String author, @NonNull Instant createdAt, @NonNull Instant updatedAt, @NonNull String text) {
+    // Yeah, boilerplate.
+    /*public Comment(@NonNull String id, @NonNull String author, @NonNull Instant createdAt, @NonNull Instant updatedAt, @NonNull String text) {
         this.id = id;
         this.author = author;
         this.createdAt = createdAt;
@@ -40,5 +40,5 @@ public class Comment {
 
     public String getText() {
         return text;
-    }
+    }*/
 }
